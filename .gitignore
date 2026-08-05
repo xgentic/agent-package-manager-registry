@@ -1,0 +1,20 @@
+# Compiled binaries
+/apm-registry
+/dist/
+
+# Runtime data directory: SQLite database, blob store, upload temp files.
+/data/
+
+*.exe
+*.test
+*.out
+
+.env
+.env.*
+!.env.example
+
+*.log
+.DS_Store
+
+.claude/settings.local.json
+internal/fixtures/testdata

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill 38868)",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(make dist *)",
+      "Bash(make check *)",
+      "Bash(file dist/*)",
+      "Bash(./dist/apm-registry-darwin-arm64 version *)",
+      "Bash(./dist/apm-registry-darwin-arm64 --version)",
+      "Bash(./dist/apm-registry-darwin-arm64 -v)"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+name: Release
+
+# Publishes the assets that install.sh and install.ps1 download. The asset
+# names here are a contract with both installers: apm-registry-<os>-<arch>[.exe]
+# plus SHA256SUMS. `make dist` builds exactly the same set.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and release"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tag history, so `git describe` in the Makefile resolves a version.
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.4"
+          cache: true
+
+      # A release that fails its own test suite should not exist.
+      - run: make check
+
+      - name: Cross-compile every platform
+        run: make dist VERSION=${{ github.event.inputs.tag || github.ref_name }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            dist/*

@@ -1,0 +1,61 @@
+# Lint configuration for apm-registry.
+#
+# The set is deliberately small and all-error: a linter that is allowed to warn
+# is a linter that gets ignored. `make lint` must be green alongside `make check`.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck      # an unchecked error on a publish path is a lost failure
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - gosec         # this server ingests attacker-controlled archives
+    - bodyclose
+    - errorlint     # the domain taxonomy relies on errors.Is / errors.As
+
+  settings:
+    gosec:
+      excludes:
+        # Archive paths are validated by internal/domain/archive/entryrules.go,
+        # which is the whole point of that package; G305 cannot see it.
+        - G304
+
+    revive:
+      rules:
+        # Every exported symbol needing its own comment produces restatements
+        # ("NewQueryService returns a new QueryService") that crowd out the
+        # comments explaining *why*, which is what this codebase spends its
+        # comment budget on. Package and block comments carry the meaning.
+        - name: exported
+          disabled: true
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: var-declaration
+
+  exclusions:
+    rules:
+      # Test fixtures build deliberately hostile archives.
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
