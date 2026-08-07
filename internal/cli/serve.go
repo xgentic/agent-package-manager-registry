@@ -23,7 +23,8 @@ const (
 
 func runServe(ctx context.Context, env Env, args []string) error {
 	fs := newFlagSet(env, "serve")
-	port := fs.String("port", "", "listen port (overrides PORT)")
+	port := fs.String("port", "", "listen port, keeping the configured host (overrides PORT)")
+	addr := fs.String("addr", "", "listen address as host:port (overrides APM_REGISTRY_ADDR)")
 	noMigrate := fs.Bool("no-migrate", false, "do not apply pending migrations on boot")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -34,6 +35,13 @@ func runServe(ctx context.Context, env Env, args []string) error {
 		return err
 	}
 	defer func() { _ = app.close() }()
+
+	// Resolved before any work with side effects: a bad address should stop the
+	// process, not leave it having migrated and swept on the way to failing.
+	listenAddr, err := resolveListenAddr(app.cfg.Addr, *addr, *port)
+	if err != nil {
+		return err
+	}
 
 	if !*noMigrate {
 		if err := app.migrate(ctx); err != nil {
@@ -50,11 +58,6 @@ func runServe(ctx context.Context, env Env, args []string) error {
 		app.log.Info("swept orphaned uploads", "count", removed)
 	}
 
-	addr := ":" + app.cfg.Port
-	if *port != "" {
-		addr = ":" + *port
-	}
-
 	handler := server.New(server.Deps{
 		Log:          app.log,
 		Config:       app.cfg,
@@ -65,7 +68,7 @@ func runServe(ctx context.Context, env Env, args []string) error {
 		Blobs:        app.blobs,
 	})
 
-	return listenAndServe(ctx, app.log.Info, addr, handler)
+	return listenAndServe(ctx, app.log.Info, listenAddr, handler)
 }
 
 // listenAndServe binds, serves, and drains on signal.

@@ -30,6 +30,26 @@ ones.
 Deployment is one static binary plus a data directory — there is no runtime
 dependency to install alongside it.
 
+### Homebrew (macOS and Linux)
+
+```sh
+brew install xgentic/tap/apm-registry
+```
+
+Homebrew can also run it for you, under launchd on macOS and systemd on Linux:
+
+```sh
+brew services start apm-registry     # starts now, and again at login
+brew services stop apm-registry
+```
+
+The service listens on `127.0.0.1:3000` and keeps its data in
+`$(brew --prefix)/var/apm-registry`, with logs beside it in `var/log`. The
+loopback address is deliberate: this build has no authentication, and a
+background service that binds every interface at login is exactly the mistake
+the warning above is about. Run `apm-registry serve` yourself if you want it
+reachable from elsewhere.
+
 ### macOS and Linux
 
 ```sh
@@ -110,7 +130,7 @@ for every variable and its default.
 ### Operator commands
 
 ```sh
-apm-registry serve [--port 3000] [--no-migrate]
+apm-registry serve [--addr 127.0.0.1:3000] [--port 3000] [--no-migrate]
 apm-registry migrate
 apm-registry repo create <name> [--public|--private] [--quota <bytes>]
 apm-registry repo list [--json]

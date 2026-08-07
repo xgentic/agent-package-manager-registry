@@ -551,6 +551,17 @@ scaling out requires the Postgres adapter.
 > Stated so the limit is a known trade-off rather than a surprise.
 *Source: [ADR-0002](adr/0002-metadata-store.md).*
 
+### TR-32
+**M** · The listen address MUST be configurable as `host:port`, so a deployment
+can bind loopback only. The default MUST remain every interface on `PORT`.
+Two settings that both name a port MUST NOT disagree silently — a conflict is a
+startup failure.
+> Until [MVP 3](../ROADMAP.md#mvp-3--authentication-and-authorisation) there is
+> no authentication, so the bind address is the only thing standing between an
+> open registry and the network. Packaged installs that start a background
+> service (Homebrew's `brew services`) depend on this to default to loopback.
+*Source: project requirement.*
+
 ---
 
 ## Deferred / explicitly out of scope

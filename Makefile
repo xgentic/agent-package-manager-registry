@@ -1,4 +1,4 @@
-.PHONY: check build vet test fmt run tidy lint test-conformance test-e2e dist clean
+.PHONY: check build vet test fmt run tidy lint test-conformance test-e2e dist clean brew-formula
 
 # The one command that verifies the codebase. Keep it green.
 check: build vet test
@@ -50,6 +50,13 @@ dist: clean
 
 clean:
 	rm -rf dist
+
+# Renders the Homebrew formula from dist/SHA256SUMS, so the tap ships the same
+# bytes this release published. Copy the output into xgentic/homebrew-tap as
+# Formula/apm-registry.rb.
+#   make dist VERSION=v0.2.0 && make brew-formula VERSION=v0.2.0
+brew-formula:
+	@VERSION=$(VERSION) ./scripts/brew-formula.sh
 
 vet:
 	go vet ./...

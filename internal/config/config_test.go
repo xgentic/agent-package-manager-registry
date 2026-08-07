@@ -43,6 +43,98 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
+// The listen address is what keeps an unauthenticated build off the network,
+// so its resolution is worth pinning down case by case.
+func TestLoadAddr(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		vars     map[string]string
+		wantAddr string
+		wantPort string
+	}{
+		{
+			// Unset must stay byte-identical to the behaviour before this
+			// variable existed: every interface, on the default port.
+			"unset listens on every interface",
+			nil,
+			":" + config.DefaultPort,
+			config.DefaultPort,
+		},
+		{
+			"unset follows PORT",
+			map[string]string{"PORT": "8080"},
+			":8080",
+			"8080",
+		},
+		{
+			"host and port",
+			map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:8080"},
+			"127.0.0.1:8080",
+			"8080",
+		},
+		{
+			"empty host is every interface",
+			map[string]string{"APM_REGISTRY_ADDR": ":8080"},
+			":8080",
+			"8080",
+		},
+		{
+			"hostname",
+			map[string]string{"APM_REGISTRY_ADDR": "localhost:3000"},
+			"localhost:3000",
+			"3000",
+		},
+		{
+			"ipv6 host",
+			map[string]string{"APM_REGISTRY_ADDR": "[::1]:3000"},
+			"[::1]:3000",
+			"3000",
+		},
+		{
+			// Agreeing with PORT is not a conflict, so it must not fail.
+			"agrees with PORT",
+			map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:8080", "PORT": "8080"},
+			"127.0.0.1:8080",
+			"8080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg, err := config.Load(env(tt.vars))
+			if err != nil {
+				t.Fatalf("Load(%v) error = %v, want nil", tt.vars, err)
+			}
+			if cfg.Addr != tt.wantAddr {
+				t.Errorf("Addr = %q, want %q", cfg.Addr, tt.wantAddr)
+			}
+			// Port stays the source of the default base URL, so it has to
+			// follow the address rather than contradict it.
+			if cfg.Port != tt.wantPort {
+				t.Errorf("Port = %q, want %q", cfg.Port, tt.wantPort)
+			}
+		})
+	}
+}
+
+// A base URL nobody set should describe the port the server actually listens
+// on, or `repo create` prints one that does not answer.
+func TestLoadAddrDrivesDefaultBaseURL(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.Load(env(map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:8080"}))
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if want := "http://localhost:8080"; cfg.BaseURL != want {
+		t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, want)
+	}
+}
+
 func TestLoadDerivedPaths(t *testing.T) {
 	t.Parallel()
 
@@ -94,6 +186,17 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 			"plain http without the escape hatch",
 			map[string]string{"APM_REGISTRY_BASE_URL": "http://registry.example.com"},
 			"ALLOW_INSECURE_HTTP",
+		},
+		{"addr without a port", map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1"}, "ADDR"},
+		{"addr with no port after the colon", map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:"}, "ADDR"},
+		{"addr port not a number", map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:http"}, "ADDR"},
+		{"addr port out of range", map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:70000"}, "ADDR"},
+		{
+			// Silently preferring one of the two is how a server ends up
+			// listening somewhere the operator did not intend.
+			"addr and PORT disagree",
+			map[string]string{"APM_REGISTRY_ADDR": "127.0.0.1:8080", "PORT": "3000"},
+			"ADDR",
 		},
 	}
 

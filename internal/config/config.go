@@ -9,6 +9,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,6 +38,7 @@ const (
 // downstream re-parses an environment variable.
 type Config struct {
 	Port        string
+	Addr        string
 	BaseURL     string
 	DataDir     string
 	DatabaseDSN string
@@ -77,14 +79,19 @@ func Load(getenv func(string) string) (Config, error) {
 		DataDir:     stringOr(getenv, "APM_REGISTRY_DATA_DIR", DefaultDataDir),
 		BlobBackend: stringOr(getenv, "APM_REGISTRY_BLOB_BACKEND", DefaultBlobBackend),
 	}
+
+	if port, err := strconv.Atoi(cfg.Port); err != nil || port < 1 || port > 65535 {
+		fail("PORT: %q is not a port number between 1 and 65535", cfg.Port)
+	}
+
+	// The listen address is resolved before the base URL, because an unset
+	// base URL is derived from the port the server actually binds.
+	cfg.Addr = resolveAddr(getenv, &cfg.Port, fail)
+
 	if cfg.BaseURL == "" {
 		// A local default so `repo create` can print a usable base URL on a
 		// fresh install. A deployment sets its real public origin.
 		cfg.BaseURL = "http://localhost:" + cfg.Port
-	}
-
-	if port, err := strconv.Atoi(cfg.Port); err != nil || port < 1 || port > 65535 {
-		fail("PORT: %q is not a port number between 1 and 65535", cfg.Port)
 	}
 
 	if cfg.BlobBackend != "fs" {
@@ -167,6 +174,57 @@ func isLoopback(baseURL string) bool {
 	default:
 		return false
 	}
+}
+
+// ValidatePort reports whether raw is a usable TCP port number. Exported so
+// the CLI's flags are held to the same rule as the environment.
+func ValidatePort(raw string) error {
+	if n, err := strconv.Atoi(raw); err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("%q is not a port number between 1 and 65535", raw)
+	}
+	return nil
+}
+
+// ValidateAddr reports whether raw is a bindable host:port address. An empty
+// host means every interface.
+func ValidateAddr(raw string) error {
+	_, port, err := net.SplitHostPort(raw)
+	if err != nil {
+		return fmt.Errorf("%q is not a host:port address (try \":3000\" or \"127.0.0.1:3000\")", raw)
+	}
+	if err := ValidatePort(port); err != nil {
+		return fmt.Errorf("%q has an unusable port: %w", raw, err)
+	}
+	return nil
+}
+
+// resolveAddr determines the TCP address the server binds.
+//
+// Unset means every interface on PORT, which is what this server did before the
+// variable existed — the default must not change under anyone. Set, it wins,
+// and *port is updated to match so the default base URL still names the port
+// that answers.
+func resolveAddr(getenv func(string) string, port *string, fail func(string, ...any)) string {
+	raw := strings.TrimSpace(getenv("APM_REGISTRY_ADDR"))
+	if raw == "" {
+		return ":" + *port
+	}
+
+	if err := ValidateAddr(raw); err != nil {
+		fail("APM_REGISTRY_ADDR: %v", err)
+		return ""
+	}
+	_, p, _ := net.SplitHostPort(raw)
+
+	// Two variables that both name a port must not disagree silently: the
+	// loser decides where an unauthenticated server listens.
+	if explicit := strings.TrimSpace(getenv("PORT")); explicit != "" && explicit != p {
+		fail("APM_REGISTRY_ADDR: %q and PORT (%q) disagree about the port; set one of them, not both", raw, explicit)
+		return ""
+	}
+
+	*port = p
+	return raw
 }
 
 func stringOr(getenv func(string) string, key, fallback string) string {

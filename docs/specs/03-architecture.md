@@ -467,6 +467,7 @@ Environment variables, validated at startup, failing fast
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | Listen port. |
+| `APM_REGISTRY_ADDR` | `:<PORT>` | Listen address as `host:port`; empty host means every interface. Disagreeing with `PORT` fails startup. |
 | `APM_REGISTRY_BASE_URL` | — | Public origin; used to build `resolved_url`-shaped links and the UI's install snippets. |
 | `APM_REGISTRY_DATA_DIR` | `./data` | Root for SQLite file and blob store. |
 | `APM_REGISTRY_DB_URL` | `sqlite://<data>/registry.db` | Metadata store DSN. |
